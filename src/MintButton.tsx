@@ -22,7 +22,7 @@ export const CTAButton = styled(Button)`
   color: white;
   font-size: 16px;
   font-weight: bold;
-`; // add your own styles here
+`;
 
 export const MintButton = ({
   onMint,
@@ -47,125 +47,45 @@ export const MintButton = ({
 
   const getMintButtonContent = () => {
     if (candyMachine?.state.isSoldOut) {
+      console.log("Candy Machine is sold out.");
       return "SOLD OUT";
     } else if (isMinting) {
+      console.log("Minting in progress.");
       return <CircularProgress />;
     } else if (
       candyMachine?.state.isPresale ||
       candyMachine?.state.isWhitelistOnly
     ) {
+      console.log("Minting is in presale or whitelist-only mode.");
       return "WHITELIST MINT";
     }
-
+    console.log("Button should be active.");
     return "MINT";
   };
 
   useEffect(() => {
-    const mint = async () => {
-      await removeAccountChangeListener(
-        connection.connection,
-        webSocketSubscriptionId
-      );
-      await onMint();
-
-      setClicked(false);
-      setVerified(false);
-    };
-    if (verified && clicked) {
-      mint();
+    console.log(`isActive: ${isActive}, isMinting: ${isMinting}, verified: ${verified}, gatewayStatus: ${gatewayStatus}`);
+    if (!isActive || isMinting || !verified || gatewayStatus !== GatewayStatus.ACTIVE) {
+      console.log("Mint button is disabled due to one or more conditions.");
+      return;
     }
-  }, [
-    verified,
-    clicked,
-    connection.connection,
-    onMint,
-    webSocketSubscriptionId,
-  ]);
-
-  const previousGatewayStatus = usePrevious(gatewayStatus);
-  useEffect(() => {
-    const fromStates = [
-      GatewayStatus.NOT_REQUESTED,
-      GatewayStatus.REFRESH_TOKEN_REQUIRED,
-    ];
-    const invalidToStates = [...fromStates, GatewayStatus.UNKNOWN];
-    if (
-      fromStates.find((state) => previousGatewayStatus === state) &&
-      !invalidToStates.find((state) => gatewayStatus === state)
-    ) {
-      setIsMinting(true);
-    }
-    console.log("change: ", GatewayStatus[gatewayStatus]);
-  }, [waitForActiveToken, previousGatewayStatus, gatewayStatus]);
-
-  useEffect(() => {
-    if (waitForActiveToken && gatewayStatus === GatewayStatus.ACTIVE) {
-      console.log("Minting after token active");
-      setWaitForActiveToken(false);
-      onMint();
-    }
-  }, [waitForActiveToken, gatewayStatus, onMint]);
+    console.log("Mint button is enabled.");
+  }, [isActive, isMinting, verified, gatewayStatus]);
 
   return (
     <CTAButton
-      disabled={isMinting || !isActive}
       onClick={async () => {
-        if (candyMachine?.state.isActive && candyMachine?.state.gatekeeper) {
-          const network =
-            candyMachine.state.gatekeeper.gatekeeperNetwork.toBase58();
-          if (network === CIVIC_GATEKEEPER_NETWORK) {
-            if (gatewayStatus === GatewayStatus.ACTIVE) {
-              await onMint();
-            } else {
-              // setIsMinting(true);
-              setWaitForActiveToken(true);
-              await requestGatewayToken();
-              console.log("after: ", gatewayStatus);
-            }
-          } else if (
-            network === "ttib7tuX8PTWPqFsmUFQTj78MbRhUmqxidJRDv4hRRE" ||
-            network === "tibePmPaoTgrs929rWpu755EXaxC7M3SthVCf6GzjZt"
-          ) {
-            setClicked(true);
-            const gatewayToken = await findGatewayToken(
-              connection.connection,
-              wallet.publicKey!,
-              candyMachine.state.gatekeeper.gatekeeperNetwork
-            );
-
-            if (gatewayToken?.isValid()) {
-              await onMint();
-            } else {
-              window.open(
-                `https://verify.encore.fans/?gkNetwork=${network}`,
-                "_blank"
-              );
-
-              const gatewayTokenAddress =
-                await getGatewayTokenAddressForOwnerAndGatekeeperNetwork(
-                  wallet.publicKey!,
-                  candyMachine.state.gatekeeper.gatekeeperNetwork
-                );
-
-              setWebSocketSubscriptionId(
-                onGatewayTokenChange(
-                  connection.connection,
-                  gatewayTokenAddress,
-                  () => setVerified(true),
-                  "confirmed"
-                )
-              );
-            }
-          } else {
-            setClicked(false);
-            throw new Error(`Unknown Gatekeeper Network: ${network}`);
-          }
-        } else {
+        console.log("Mint button clicked.");
+        setIsMinting(true);
+        try {
           await onMint();
-          setClicked(false);
+          setIsMinting(false);
+        } catch (error) {
+          console.error("Error during minting: ", error);
+          setIsMinting(false);
         }
       }}
-      variant="contained"
+      disabled={!isActive || isMinting || !verified || gatewayStatus !== GatewayStatus.ACTIVE}
     >
       {getMintButtonContent()}
     </CTAButton>
